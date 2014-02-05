@@ -12,40 +12,38 @@ import (
 
 // Colors ======================================================================
 var (
-    DarkGray Paint = `1;30`
-    Red      Paint = `1;31`
-    Green    Paint = `1;32`
-    Yellow   Paint = `1;33`
-    Blue     Paint = `1;34`
-    Purple   Paint = `1;35`
-    Cyan     Paint = `1;36`
-    White    Paint = `1;37`
+    // ANSI Color escap sequences 
+    red      paint = `1;31` // Error
+    green    paint = `1;32` // Info
+    yellow   paint = `1;33` // Warning
+    purple   paint = `1;35` // Fatal
+    cyan     paint = `1;36` // Debug 
 
-    colors = []Paint{Cyan, Green, Yellow, Red, Purple}
+    colors = []paint{cyan, green, yellow, red, purple}
 )
 
 type brush func(string) string
 
-type Paint string
+type paint string
 
-type Style struct {
-    color Paint
+type style struct {
+    color paint
     code  string
 }
 
-func (s Style) brush() brush {
+func (s style) brush() brush {
     return func(text string) string {
         return s.code + text + "\033[0m"
     }
 }
 
-func newBrush(color Paint) brush {
-    return Style{color, "\033[" + string(color) + "m" + ``}.brush()
+func newBrush(color paint) brush {
+    return style{color, "\033[" + string(color) + "m" + ``}.brush()
 }
 
 // =============================================================================
 
-type Level int
+type level int
 
 const (
     FILELINE = 1 << iota // show filename:lineno
@@ -59,14 +57,14 @@ const (
 )
 
 const (
-    DEBUG Level = iota
+    DEBUG level = iota
     INFO
     WARNING
     ERROR
     FATAL
 )
 
-var levelBrushMap = make(map[Level]brush)
+var levelBrushMap = make(map[level]brush)
 
 func init() {
     levelBrushMap[DEBUG] = newBrush(colors[DEBUG])
@@ -82,7 +80,7 @@ var mutex = &sync.Mutex{}
 
 type Logger struct {
     out          io.Writer
-    level        Level
+    level        level
     writer       io.Writer
     flags        int
     prefix       string
@@ -110,11 +108,11 @@ func (logger *Logger) GetFlags() int {
     return logger.flags
 }
 
-func (logger *Logger) SetLevel(level Level) {
+func (logger *Logger) SetLevel(level level) {
     logger.level = level
 }
 
-func (logger *Logger) GetLevel() Level {
+func (logger *Logger) GetLevel() level {
     return logger.level
 }
 
@@ -126,7 +124,7 @@ func (logger *Logger) DisableColor() {
     logger.colorEnabled = false
 }
 
-func (logger *Logger) write(level Level, format string, a ...interface{}) (n int, err error) {
+func (logger *Logger) write(level level, format string, a ...interface{}) (n int, err error) {
     if level < logger.level {
         return
     }
