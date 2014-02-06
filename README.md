@@ -1,8 +1,6 @@
 Beaver
 ======
 ![alt tag](https://raw.github.com/JeffMGreg/beaver/master/beaver.jpg)
-
-## Description
 A simple GoLang logging package that supports levels and colors when writing to the terminal.  A project that I'm writing to help me learn Go.  Probably shouldn't use in production.
 
 ## Usage
