@@ -1,189 +1,243 @@
 package beaver
 
 import (
-    "fmt"
-    "io"
-    "os"
-    "runtime"
-    "strings"
-    "sync"
-    "time"
+	"fmt"
+	"io"
+	"log"
+	"log/syslog"
+	"os"
+	"strings"
 )
 
-type level int
+type loglevel int
+type logflags int
 
 const (
-    FILELINE = 1 << iota // show filename:lineno
-    DATE
-    TIME
-    COLOR
-
-    DATETIME = DATE | TIME
-    DEVFLAG  = DATETIME | FILELINE | COLOR // for develop use
-    STDFLAG  = DATETIME | COLOR
+	DEBUG loglevel = iota
+	INFO
+	NOTICE
+	WARNING
+	ERROR
+	CRITICAL
+	FATAL
+	PANIC
 )
 
 const (
-    DEBUG level = iota
-    INFO
-    WARNING
-    ERROR
-    FATAL
+	Ldate         = log.Ldate
+	Ltime         = log.Ltime
+	Lmicroseconds = log.Lmicroseconds
+	Llongfile     = log.Llongfile
+	Lshortfile    = log.Lshortfile
+	LstdFlags     = Ldate | Ltime
 )
 
-var levelBrushMap = make(map[level]brush)
-
-func init() {
-    levelBrushMap[DEBUG] = newBrush(colors[DEBUG])
-    levelBrushMap[INFO] = newBrush(colors[INFO])
-    levelBrushMap[WARNING] = newBrush(colors[WARNING])
-    levelBrushMap[ERROR] = newBrush(colors[ERROR])
-    levelBrushMap[FATAL] = newBrush(colors[FATAL])
+var levels = []string{
+	"[DEBUG]",
+	"[INFO]",
+	"[NOTICE]",
+	"[WARN]",
+	"[ERROR]",
+	"[CRITICAL]",
+	"[FATAL]",
+	"[PANIC]",
 }
-
-var levels = []string{"[DEBUG]", "[INFO]", "[WARN]", "[ERROR]", "[FATAL]"}
-
-var mutex = &sync.Mutex{}
 
 type Logger struct {
-    out          io.Writer
-    level        level
-    writer       io.Writer
-    flags        int
-    prefix       string
-    colorEnabled bool
+	level  loglevel
+	writer *log.Logger
 }
 
-func NewLogger(out io.Writer, prefix ...string) *Logger {
-    if out == nil {
-        out = os.Stdout
-    }
-    return &Logger{
-        level:        INFO,
-        writer:       out,
-        colorEnabled: false,
-        flags:        DEVFLAG,
-        prefix:       strings.Join(prefix, " "),
-    }
+func NewLogger(out io.Writer, prefix string, detail int) (*Logger, error) {
+	if out == nil {
+		out = os.Stdout
+	}
+	prefix = strings.TrimSpace(prefix) + " "
+
+	return &Logger{
+		level:  DEBUG,
+		writer: log.New(out, prefix, detail),
+	}, nil
 }
 
-func (logger *Logger) SetFlags(flag int){
-    logger.flags = flag
+func (logger *Logger) SetLevel(level loglevel) {
+	logger.level = level
 }
 
-func (logger *Logger) GetFlags() int {
-    return logger.flags
+func (logger *Logger) GetLevel() loglevel {
+	return logger.level
 }
 
-func (logger *Logger) SetLevel(level level) {
-    logger.level = level
-}
+func (logger *Logger) write(level loglevel, format string, text ...interface{}) {
 
-func (logger *Logger) GetLevel() level {
-    return logger.level
-}
+	if level < logger.level {
+		return
+	}
 
-func (logger *Logger) EnableColor() {
-    logger.colorEnabled = true
-}
+	var message string
+	if format == "" {
+		for _, i := range text {
+			message += " " + fmt.Sprintf("%v", i)
+		}
+		message = levels[int(level)] + message
+	} else {
+		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
+	}
 
-func (logger *Logger) DisableColor() {
-    logger.colorEnabled = false
-}
-
-func (logger *Logger) write(level level, format string, a ...interface{}) (n int, err error) {
-    if level < logger.level {
-        return
-    }
-    var levelName string = levels[int(level)]
-    var sep = " "
-    var prefix, outstr = logger.prefix, ""
-
-    if logger.flags&DATETIME != 0 {
-        now := time.Now()
-        layout := ""
-        if logger.flags&DATE != 0 {
-            layout += "2006/01/02"
-        }
-        if logger.flags&TIME != 0 {
-            layout += " 15:04:05"
-        }
-        layout = strings.TrimSpace(layout)
-        prefix += now.Format(layout)
-    }
-
-    if logger.flags&FILELINE != 0 {
-        // Retrieve the stack infos
-        _, file, line, ok := runtime.Caller(2)
-        if !ok {
-            file = "<unknown>"
-            line = -1
-        } else {
-            file = file[strings.LastIndex(file, "/")+1:]
-        }
-        prefix = fmt.Sprintf("%s %s:%d", prefix, file, line)
-    }
-
-    outstr += levelName
-
-    if format == "" {
-        for _, i := range a {
-            outstr += sep + fmt.Sprintf("%v", i)
-        }
-    } else {
-        outstr = outstr + sep + fmt.Sprintf(format, a...)
-    }
-    if !strings.HasSuffix(outstr, "\n") {
-        outstr += "\n"
-    }
-
-    if logger.colorEnabled && logger.flags&COLOR != 0 {
-        outstr = levelBrushMap[level](outstr)
-    }
-
-    mutex.Lock()
-    defer mutex.Unlock()
-    return logger.writer.Write([]byte(prefix + sep + outstr))
+	if level < FATAL {
+		logger.writer.Print(message)
+	} else if level < PANIC {
+		logger.writer.Fatal(message)
+	} else {
+		logger.writer.Panic(message)
+	}
 }
 
 func (logger *Logger) Debug(v ...interface{}) {
-    logger.write(DEBUG, "", v...)
+	logger.write(DEBUG, "", v...)
 }
 
 func (logger *Logger) Debugf(format string, v ...interface{}) {
-    logger.write(DEBUG, format, v...)
+	logger.write(DEBUG, format, v...)
 }
 
 func (logger *Logger) Info(v ...interface{}) {
-    logger.write(INFO, "", v...)
+	logger.write(INFO, "", v...)
 }
 
 func (logger *Logger) Infof(format string, v ...interface{}) {
-    logger.write(INFO, format, v...)
+	logger.write(INFO, format, v...)
 }
 
 func (logger *Logger) Warn(v ...interface{}) {
-    logger.write(WARNING, "", v...)
+	logger.write(WARNING, "", v...)
 }
 
 func (logger *Logger) Warnf(format string, v ...interface{}) {
-    logger.write(WARNING, format, v...)
+	logger.write(WARNING, format, v...)
 }
 
 func (logger *Logger) Error(v ...interface{}) {
-    logger.write(ERROR, "", v...)
+	logger.write(ERROR, "", v...)
 }
 
 func (logger *Logger) Errorf(format string, v ...interface{}) {
-    logger.write(ERROR, format, v...)
+	logger.write(ERROR, format, v...)
 }
 
 func (logger *Logger) Fatalf(format string, v ...interface{}) {
-    logger.write(FATAL, format, v...)
-    os.Exit(1)
+	logger.write(FATAL, format, v...)
 }
 
 func (logger *Logger) Fatal(v ...interface{}) {
-    logger.write(FATAL, "", v...)
-    os.Exit(1)
+	logger.write(FATAL, "", v...)
+}
+
+func (logger *Logger) Panicf(format string, v ...interface{}) {
+	logger.write(PANIC, format, v...)
+}
+
+func (logger *Logger) Panic(v ...interface{}) {
+	logger.write(PANIC, "", v...)
+}
+
+type Sysger struct {
+	level  loglevel
+	writer *syslog.Writer
+}
+
+func NewSyslog(prefix string) (*Sysger, error) {
+
+	writer, err := syslog.New(0, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Sysger{
+		level:  DEBUG,
+		writer: writer,
+	}, nil
+}
+
+func (logger *Sysger) write(level loglevel, format string, text ...interface{}) error {
+
+	if level < logger.level {
+		return nil
+	}
+
+	var message string
+	if format == "" {
+		for _, i := range text {
+			message += " " + fmt.Sprintf("%v", i)
+		}
+		message = levels[int(level)] + message
+	} else {
+		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
+	}
+
+	switch level {
+	case CRITICAL:
+		return logger.writer.Crit(message)
+	case ERROR:
+		return logger.writer.Err(message)
+	case WARNING:
+		return logger.writer.Warning(message)
+	case NOTICE:
+		return logger.writer.Notice(message)
+	case INFO:
+		return logger.writer.Info(message)
+	case DEBUG:
+		return logger.writer.Debug(message)
+	default:
+	}
+	panic("unhandled log level")
+
+}
+
+func (logger *Sysger) Debug(v ...interface{}) {
+	_ = logger.write(DEBUG, "", v...)
+}
+
+func (logger *Sysger) Debugf(format string, v ...interface{}) {
+	_ = logger.write(DEBUG, format, v...)
+}
+
+func (logger *Sysger) Info(v ...interface{}) {
+	_ = logger.write(INFO, "", v...)
+}
+
+func (logger *Sysger) Infof(format string, v ...interface{}) {
+	_ = logger.write(INFO, format, v...)
+}
+
+func (logger *Sysger) Notice(v ...interface{}) {
+	_ = logger.write(NOTICE, "", v...)
+}
+
+func (logger *Sysger) Noticef(format string, v ...interface{}) {
+	_ = logger.write(NOTICE, format, v...)
+}
+
+func (logger *Sysger) Warn(v ...interface{}) {
+	_ = logger.write(WARNING, "", v...)
+}
+
+func (logger *Sysger) Warnf(format string, v ...interface{}) {
+	_ = logger.write(WARNING, format, v...)
+}
+
+func (logger *Sysger) Error(v ...interface{}) {
+	_ = logger.write(ERROR, "", v...)
+}
+
+func (logger *Sysger) Errorf(format string, v ...interface{}) {
+	_ = logger.write(ERROR, format, v...)
+}
+
+func (logger *Sysger) Critical(v ...interface{}) {
+	_ = logger.write(CRITICAL, "", v...)
+}
+
+func (logger *Sysger) Criticalf(format string, v ...interface{}) {
+	_ = logger.write(CRITICAL, format, v...)
 }
