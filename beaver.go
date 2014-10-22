@@ -21,9 +21,7 @@ const (
 	CRITICAL
 	FATAL
 	PANIC
-)
 
-const (
 	Ldate         = log.Ldate
 	Ltime         = log.Ltime
 	Lmicroseconds = log.Lmicroseconds
@@ -36,7 +34,7 @@ var levels = []string{
 	"[DEBUG]",
 	"[INFO]",
 	"[NOTICE]",
-	"[WARN]",
+	"[WARNING]",
 	"[ERROR]",
 	"[CRITICAL]",
 	"[FATAL]",
@@ -157,6 +155,14 @@ func NewSyslog(prefix string) (*Sysger, error) {
 		level:  DEBUG,
 		writer: writer,
 	}, nil
+}
+
+func (logger *Sysger) SetLevel(level loglevel) {
+	logger.level = level
+}
+
+func (logger *Sysger) GetLevel() loglevel {
+	return logger.level
 }
 
 func (logger *Sysger) write(level loglevel, format string, text ...interface{}) error {
