@@ -19,8 +19,6 @@ const (
 	WARNING
 	ERROR
 	CRITICAL
-	FATAL
-	PANIC
 
 	Ldate         = log.Ldate
 	Ltime         = log.Ltime
@@ -51,7 +49,6 @@ var levels = []string{
 //	Critical(string, ...interface {})
 //	Criticalf(...interface {})
 //}
-
 
 type StdoutLogger struct {
 	level  loglevel
@@ -153,26 +150,26 @@ func (logger *StdoutLogger) Errorf(format string, v ...interface{}) {
 }
 
 func (logger *StdoutLogger) Criticalf(format string, v ...interface{}) {
-	logger.write(PANIC, format, v...)
+	logger.write(CRITICAL, format, v...)
 }
 
 func (logger *StdoutLogger) Critical(v ...interface{}) {
-	logger.write(PANIC, "", v...)
+	logger.write(CRITICAL, "", v...)
 }
 
-type SyslogLoggger struct {
+type SyslogLogger struct {
 	level  loglevel
 	writer *syslog.Writer
 }
 
-func NewSyslogLogger(prefix string) (*SyslogLoggger, error) {
+func NewSyslogLogger(prefix string) (*SyslogLogger, error) {
 
 	writer, err := syslog.New(0, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	return &SyslogLoggger{
+	return &SyslogLogger{
 		level:  DEBUG,
 		writer: writer,
 	}, nil
