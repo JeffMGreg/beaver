@@ -37,36 +37,48 @@ var levels = []string{
 	"[WARNING]",
 	"[ERROR]",
 	"[CRITICAL]",
-	"[FATAL]",
-	"[PANIC]",
 }
 
-type Logger struct {
+//type Beaver interface {
+//	Debug(string, ...interface {})
+//	Debugf(...interface {})
+//	Info(string, ...interface {})
+//	Infof(...interface {})
+//	Notice(string, ...interface {})
+//	Noticef(...interface {})
+//	Error(string, ...interface {})
+//	Errorf(...interface {})
+//	Critical(string, ...interface {})
+//	Criticalf(...interface {})
+//}
+
+
+type StdoutLogger struct {
 	level  loglevel
 	writer *log.Logger
 }
 
-func NewLogger(out io.Writer, prefix string, detail int) (*Logger, error) {
+func NewStdoutLogger(out io.Writer, prefix string, detail int) (*StdoutLogger, error) {
 	if out == nil {
 		out = os.Stdout
 	}
 	prefix = strings.TrimSpace(prefix) + " "
 
-	return &Logger{
+	return &StdoutLogger{
 		level:  DEBUG,
 		writer: log.New(out, prefix, detail),
 	}, nil
 }
 
-func (logger *Logger) SetLevel(level loglevel) {
+func (logger *StdoutLogger) SetLevel(level loglevel) {
 	logger.level = level
 }
 
-func (logger *Logger) GetLevel() loglevel {
+func (logger *StdoutLogger) GetLevel() loglevel {
 	return logger.level
 }
 
-func (logger *Logger) write(level loglevel, format string, text ...interface{}) {
+func (logger *StdoutLogger) write(level loglevel, format string, text ...interface{}) {
 
 	if level < logger.level {
 		return
@@ -82,90 +94,99 @@ func (logger *Logger) write(level loglevel, format string, text ...interface{}) 
 		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
 	}
 
-	if level < FATAL {
-		logger.writer.Print(message)
-	} else if level < PANIC {
-		logger.writer.Fatal(message)
-	} else {
+	switch level {
+	case CRITICAL:
 		logger.writer.Panic(message)
+	case ERROR:
+		logger.writer.Print(message)
+	case WARNING:
+		logger.writer.Print(message)
+	case NOTICE:
+		logger.writer.Print(message)
+	case INFO:
+		logger.writer.Print(message)
+	case DEBUG:
+		logger.writer.Print(message)
+	default:
 	}
+	panic("unhandled log level")
 }
 
-func (logger *Logger) Debug(v ...interface{}) {
+func (logger *StdoutLogger) Debug(v ...interface{}) {
 	logger.write(DEBUG, "", v...)
 }
 
-func (logger *Logger) Debugf(format string, v ...interface{}) {
+func (logger *StdoutLogger) Debugf(format string, v ...interface{}) {
 	logger.write(DEBUG, format, v...)
 }
 
-func (logger *Logger) Info(v ...interface{}) {
+func (logger *StdoutLogger) Info(v ...interface{}) {
 	logger.write(INFO, "", v...)
 }
 
-func (logger *Logger) Infof(format string, v ...interface{}) {
+func (logger *StdoutLogger) Infof(format string, v ...interface{}) {
 	logger.write(INFO, format, v...)
 }
 
-func (logger *Logger) Warn(v ...interface{}) {
+func (logger *StdoutLogger) Noticef(format string, v ...interface{}) {
+	logger.write(NOTICE, format, v...)
+}
+
+func (logger *StdoutLogger) Notice(v ...interface{}) {
+	logger.write(NOTICE, "", v...)
+}
+
+func (logger *StdoutLogger) Warn(v ...interface{}) {
 	logger.write(WARNING, "", v...)
 }
 
-func (logger *Logger) Warnf(format string, v ...interface{}) {
+func (logger *StdoutLogger) Warnf(format string, v ...interface{}) {
 	logger.write(WARNING, format, v...)
 }
 
-func (logger *Logger) Error(v ...interface{}) {
+func (logger *StdoutLogger) Error(v ...interface{}) {
 	logger.write(ERROR, "", v...)
 }
 
-func (logger *Logger) Errorf(format string, v ...interface{}) {
+func (logger *StdoutLogger) Errorf(format string, v ...interface{}) {
 	logger.write(ERROR, format, v...)
 }
 
-func (logger *Logger) Fatalf(format string, v ...interface{}) {
-	logger.write(FATAL, format, v...)
-}
-
-func (logger *Logger) Fatal(v ...interface{}) {
-	logger.write(FATAL, "", v...)
-}
-
-func (logger *Logger) Panicf(format string, v ...interface{}) {
+func (logger *StdoutLogger) Criticalf(format string, v ...interface{}) {
 	logger.write(PANIC, format, v...)
 }
 
-func (logger *Logger) Panic(v ...interface{}) {
+func (logger *StdoutLogger) Critical(v ...interface{}) {
 	logger.write(PANIC, "", v...)
 }
 
-type Sysger struct {
+type SyslogLoggger struct {
 	level  loglevel
 	writer *syslog.Writer
 }
 
-func NewSyslog(prefix string) (*Sysger, error) {
+func NewSyslogLogger(prefix string) (*SyslogLoggger, error) {
 
 	writer, err := syslog.New(0, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Sysger{
+	return &SyslogLoggger{
 		level:  DEBUG,
 		writer: writer,
 	}, nil
 }
 
-func (logger *Sysger) SetLevel(level loglevel) {
+func (logger *SyslogLogger) SetLevel(level loglevel) {
 	logger.level = level
 }
 
-func (logger *Sysger) GetLevel() loglevel {
+func (logger *SyslogLogger) GetLevel() loglevel {
 	return logger.level
 }
 
-func (logger *Sysger) write(level loglevel, format string, text ...interface{}) error {
+func (logger *SyslogLogger) write(level loglevel, format string, text ...interface{}) error {
 
 	if level < logger.level {
 		return nil
@@ -200,50 +221,50 @@ func (logger *Sysger) write(level loglevel, format string, text ...interface{}) 
 
 }
 
-func (logger *Sysger) Debug(v ...interface{}) {
+func (logger *SyslogLogger) Debug(v ...interface{}) {
 	_ = logger.write(DEBUG, "", v...)
 }
 
-func (logger *Sysger) Debugf(format string, v ...interface{}) {
+func (logger *SyslogLogger) Debugf(format string, v ...interface{}) {
 	_ = logger.write(DEBUG, format, v...)
 }
 
-func (logger *Sysger) Info(v ...interface{}) {
+func (logger *SyslogLogger) Info(v ...interface{}) {
 	_ = logger.write(INFO, "", v...)
 }
 
-func (logger *Sysger) Infof(format string, v ...interface{}) {
+func (logger *SyslogLogger) Infof(format string, v ...interface{}) {
 	_ = logger.write(INFO, format, v...)
 }
 
-func (logger *Sysger) Notice(v ...interface{}) {
+func (logger *SyslogLogger) Notice(v ...interface{}) {
 	_ = logger.write(NOTICE, "", v...)
 }
 
-func (logger *Sysger) Noticef(format string, v ...interface{}) {
+func (logger *SyslogLogger) Noticef(format string, v ...interface{}) {
 	_ = logger.write(NOTICE, format, v...)
 }
 
-func (logger *Sysger) Warn(v ...interface{}) {
+func (logger *SyslogLogger) Warn(v ...interface{}) {
 	_ = logger.write(WARNING, "", v...)
 }
 
-func (logger *Sysger) Warnf(format string, v ...interface{}) {
+func (logger *SyslogLogger) Warnf(format string, v ...interface{}) {
 	_ = logger.write(WARNING, format, v...)
 }
 
-func (logger *Sysger) Error(v ...interface{}) {
+func (logger *SyslogLogger) Error(v ...interface{}) {
 	_ = logger.write(ERROR, "", v...)
 }
 
-func (logger *Sysger) Errorf(format string, v ...interface{}) {
+func (logger *SyslogLogger) Errorf(format string, v ...interface{}) {
 	_ = logger.write(ERROR, format, v...)
 }
 
-func (logger *Sysger) Critical(v ...interface{}) {
+func (logger *SyslogLogger) Critical(v ...interface{}) {
 	_ = logger.write(CRITICAL, "", v...)
 }
 
-func (logger *Sysger) Criticalf(format string, v ...interface{}) {
+func (logger *SyslogLogger) Criticalf(format string, v ...interface{}) {
 	_ = logger.write(CRITICAL, format, v...)
 }
