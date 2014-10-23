@@ -50,19 +50,51 @@ var levels = []string{
 //	Criticalf(...interface {})
 //}
 
+var brushes = make(map[loglevel]brush)
+
+func init() {
+	brushes[DEBUG] = newBrush(cyan)
+	brushes[INFO] = newBrush(green)
+	brushes[NOTICE] = newBrush(green)
+	brushes[WARNING] = newBrush(yellow)
+	brushes[ERROR] = newBrush(red)
+	brushes[CRITICAL] = newBrush(purple)
+
+}
+
 type StdoutLogger struct {
 	level  loglevel
+	color  bool
 	writer *log.Logger
 }
 
-func NewStdoutLogger(out io.Writer, prefix string, detail int) (*StdoutLogger, error) {
+func messageFormatter(level loglevel, format string, color bool, text ...interface{}) string {
+	var message string
+	if format == "" {
+		for _, i := range text {
+			message += " " + fmt.Sprintf("%v", i)
+		}
+		message = levels[int(level)] + message
+	} else {
+		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
+	}
+
+	if color {
+		message = brushes[level](message)
+	}
+
+	return message
+}
+
+func NewStdoutLogger(out io.Writer, prefix string, detail int, level loglevel) (*StdoutLogger, error) {
 	if out == nil {
 		out = os.Stdout
 	}
 	prefix = strings.TrimSpace(prefix) + " "
 
 	return &StdoutLogger{
-		level:  DEBUG,
+		level:  level,
+		color:  false,
 		writer: log.New(out, prefix, detail),
 	}, nil
 }
@@ -75,22 +107,20 @@ func (logger *StdoutLogger) GetLevel() loglevel {
 	return logger.level
 }
 
+func (logger *StdoutLogger) EnableColors(){
+	logger.color = true
+}
+
+func (logger *StdoutLogger) DisableColors(){
+	logger.color = false
+}
+
 func (logger *StdoutLogger) write(level loglevel, format string, text ...interface{}) {
 
 	if level < logger.level {
 		return
 	}
-
-	var message string
-	if format == "" {
-		for _, i := range text {
-			message += " " + fmt.Sprintf("%v", i)
-		}
-		message = levels[int(level)] + message
-	} else {
-		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
-	}
-
+	message := messageFormatter(level, format, logger.color, text...)
 	switch level {
 	case CRITICAL:
 		logger.writer.Panic(message)
@@ -106,7 +136,6 @@ func (logger *StdoutLogger) write(level loglevel, format string, text ...interfa
 		logger.writer.Print(message)
 	default:
 	}
-	panic("unhandled log level")
 }
 
 func (logger *StdoutLogger) Debug(v ...interface{}) {
@@ -159,10 +188,19 @@ func (logger *StdoutLogger) Critical(v ...interface{}) {
 
 type SyslogLogger struct {
 	level  loglevel
+	color  bool
 	writer *syslog.Writer
 }
 
-func NewSyslogLogger(prefix string) (*SyslogLogger, error) {
+func (logger *SyslogLogger) EnableColors(){
+	logger.color = true
+}
+
+func (logger *SyslogLogger) DisableColors(){
+	logger.color = false
+}
+
+func NewSyslogLogger(prefix string, level loglevel) (*SyslogLogger, error) {
 
 	writer, err := syslog.New(0, prefix)
 	if err != nil {
@@ -170,7 +208,8 @@ func NewSyslogLogger(prefix string) (*SyslogLogger, error) {
 	}
 
 	return &SyslogLogger{
-		level:  DEBUG,
+		level:  level,
+		color:  false,
 		writer: writer,
 	}, nil
 }
@@ -183,85 +222,75 @@ func (logger *SyslogLogger) GetLevel() loglevel {
 	return logger.level
 }
 
-func (logger *SyslogLogger) write(level loglevel, format string, text ...interface{}) error {
+func (logger *SyslogLogger) write(level loglevel, format string, text ...interface{}) {
 
 	if level < logger.level {
-		return nil
+		return
 	}
 
-	var message string
-	if format == "" {
-		for _, i := range text {
-			message += " " + fmt.Sprintf("%v", i)
-		}
-		message = levels[int(level)] + message
-	} else {
-		message = levels[int(level)] + " " + fmt.Sprintf(format, text...)
-	}
+	message := messageFormatter(level, format, logger.color, text...)
 
 	switch level {
 	case CRITICAL:
-		return logger.writer.Crit(message)
+		_ = logger.writer.Crit(message)
 	case ERROR:
-		return logger.writer.Err(message)
+		_ = logger.writer.Err(message)
 	case WARNING:
-		return logger.writer.Warning(message)
+		_ = logger.writer.Warning(message)
 	case NOTICE:
-		return logger.writer.Notice(message)
+		_ = logger.writer.Notice(message)
 	case INFO:
-		return logger.writer.Info(message)
+		_ = logger.writer.Info(message)
 	case DEBUG:
-		return logger.writer.Debug(message)
+		_ = logger.writer.Debug(message)
 	default:
 	}
-	panic("unhandled log level")
-
 }
 
 func (logger *SyslogLogger) Debug(v ...interface{}) {
-	_ = logger.write(DEBUG, "", v...)
+	logger.write(DEBUG, "", v...)
 }
 
 func (logger *SyslogLogger) Debugf(format string, v ...interface{}) {
-	_ = logger.write(DEBUG, format, v...)
+	logger.write(DEBUG, format, v...)
 }
 
 func (logger *SyslogLogger) Info(v ...interface{}) {
-	_ = logger.write(INFO, "", v...)
+	logger.write(INFO, "", v...)
 }
 
 func (logger *SyslogLogger) Infof(format string, v ...interface{}) {
-	_ = logger.write(INFO, format, v...)
+	logger.write(INFO, format, v...)
 }
 
 func (logger *SyslogLogger) Notice(v ...interface{}) {
-	_ = logger.write(NOTICE, "", v...)
+	logger.write(NOTICE, "", v...)
 }
 
 func (logger *SyslogLogger) Noticef(format string, v ...interface{}) {
-	_ = logger.write(NOTICE, format, v...)
+	logger.write(NOTICE, format, v...)
 }
 
 func (logger *SyslogLogger) Warn(v ...interface{}) {
-	_ = logger.write(WARNING, "", v...)
+	logger.write(WARNING, "", v...)
 }
 
 func (logger *SyslogLogger) Warnf(format string, v ...interface{}) {
-	_ = logger.write(WARNING, format, v...)
+	logger.write(WARNING, format, v...)
 }
 
 func (logger *SyslogLogger) Error(v ...interface{}) {
-	_ = logger.write(ERROR, "", v...)
+	logger.write(ERROR, "", v...)
 }
 
 func (logger *SyslogLogger) Errorf(format string, v ...interface{}) {
-	_ = logger.write(ERROR, format, v...)
+	logger.write(ERROR, format, v...)
 }
 
 func (logger *SyslogLogger) Critical(v ...interface{}) {
-	_ = logger.write(CRITICAL, "", v...)
+	logger.write(CRITICAL, "", v...)
 }
 
 func (logger *SyslogLogger) Criticalf(format string, v ...interface{}) {
-	_ = logger.write(CRITICAL, format, v...)
+	logger.write(CRITICAL, format, v...)
 }
